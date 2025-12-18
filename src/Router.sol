@@ -6,6 +6,7 @@ import {LvrAMM} from "src/LvrAMM.sol";
 
 contract Router {
     error DepositFailed();
+    error WithdrawFailed();
 
     event MarketCreated(bytes32 marketId, address resolver, address market);
 
@@ -30,7 +31,7 @@ contract Router {
         bytes32 marketId = keccak256(abi.encodePacked(prediction, resolver));
         require(!markets[marketId].intialized, "Market Already Exists");
 
-        LvrAMM market = new LvrAMM(liquidity, resolver);
+        LvrAMM market = new LvrAMM(resolver);
         /*
         Transfer USD token to market contract
         */        
@@ -53,14 +54,25 @@ contract Router {
         uint256 initialBalance = mUSD.balanceOf(market);
         mUSD.transferFrom(msg.sender, address(market), amount);
 
-        if(mUSD.balanceOf(market) >= initialBalance){
+        if(mUSD.balanceOf(market) >= initialBalance + amount){
             LvrAMM(market).updateBalance(msg.sender, amount);
         }else revert DepositFailed();
     }
     
-    function withdraw() public {}
+    function withdraw(uint256 amount, address market) public {
+        uint256 initialBalance = mUSD.balanceOf(market);
 
-    function buy() public {}
+        require(LvrAMM(market).getUserBalance(msg.sender) > amount, "Insufficient Balance");
+        mUSD.transferFrom(address(market), msg.sender, amount);
+
+        if(mUSD.balanceOf(market) <= initialBalance - amount){
+            LvrAMM(market).updateBalance(msg.sender, amount);
+        }else revert WithdrawFailed();
+    }
+
+    function buy(address market, uint256 amount) public {
+        
+    }
 
     function sell() public {}
 
