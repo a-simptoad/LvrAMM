@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import {FixedPointMathLib} from "lib/solady/src/utils/FixedPointMathLib.sol";
 import {Gaussian} from "./Gaussian.sol";
 
-contract Math{
+library Math {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
 

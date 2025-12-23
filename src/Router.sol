@@ -2,12 +2,9 @@
 pragma solidity ^0.8.13;
 
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {LvrAMM} from "src/LvrAMM.sol";
+import {LvrMarket} from "src/LvrMarket.sol";
 
 contract Router {
-    error DepositFailed();
-    error WithdrawFailed();
-
     event MarketCreated(bytes32 marketId, address resolver, address market);
 
     struct MarketInfo {
@@ -15,7 +12,6 @@ contract Router {
         address resolver;
         uint256 liquidity;
         bool intialized;
-        bytes32 data;
     }
 
     mapping(bytes32 marketId => MarketInfo info) public markets;
@@ -31,7 +27,7 @@ contract Router {
         bytes32 marketId = keccak256(abi.encodePacked(prediction, resolver));
         require(!markets[marketId].intialized, "Market Already Exists");
 
-        LvrAMM market = new LvrAMM(resolver);
+        LvrMarket market = new LvrMarket(resolver);
         /*
         Transfer USD token to market contract
         */        
@@ -42,43 +38,31 @@ contract Router {
             market: address(market),
             resolver: resolver,
             liquidity: liquidity,
-            intialized: true,
-            data: bytes32(abi.encode(prediction))
+            intialized: true
         });
         
         emit MarketCreated(marketId, resolver, address(market));
     }
 
-    function deposit(uint256 amount, address market) public {
-        // User has USDc tokens
-        uint256 initialBalance = mUSD.balanceOf(market);
-        mUSD.transferFrom(msg.sender, address(market), amount);
-
-        if(mUSD.balanceOf(market) >= initialBalance + amount){
-            LvrAMM(market).updateBalance(msg.sender, amount);
-        }else revert DepositFailed();
-    }
+    // function deposit(uint256 amount, address market) public {}
     
-    function withdraw(uint256 amount, address market) public {
-        uint256 initialBalance = mUSD.balanceOf(market);
+    // function withdraw(uint256 amount, address market) public {}
 
-        require(LvrAMM(market).getUserBalance(msg.sender) > amount, "Insufficient Balance");
-        mUSD.transferFrom(address(market), msg.sender, amount);
+    function buyYes(address market, uint256 amount) public {
+        // Takes mUSD from user
+        // Mints Yes + No token
+        // Sells No token to AMM
+        // Sends corresponding Yes token to User
 
-        if(mUSD.balanceOf(market) <= initialBalance - amount){
-            LvrAMM(market).updateBalance(msg.sender, amount);
-        }else revert WithdrawFailed();
+        mUSD.transferFrom(msg.sender, market, amount);
+        LvrMarket(market).swap(amount, msg.sender);
     }
 
-    function buy(address market, uint256 amount) public {
-        
-    }
+    function sellYes() public {}
 
-    function sell() public {}
+    // function depositAndBuyToken() public {}
 
-    function depositAndBuyToken() public {}
-
-    function sellTokenAndWithdraw() public {}
+    // function sellTokenAndWithdraw() public {}
 
     function resolveMarket() public {}
 }
