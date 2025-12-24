@@ -7,6 +7,7 @@ import {FixedPointMathLib} from "lib/solady/src/utils/FixedPointMathLib.sol";
 
 library SwapMath {
     int256 constant APPROX = 1e15;
+    int256 constant MAX_ITERS = 10;
 
     function getSwapAmount(uint256 currentYesReserves, uint256 currentNoReserves, uint256 liquidity) external pure returns(uint256) {
         // Invariant function
@@ -17,34 +18,39 @@ library SwapMath {
         int256 y = int256(currentNoReserves);
         int256 l = int256(liquidity);
 
-        return uint256(getAmountYes(x, y, l));
+        return uint256(getSwapAmountYes(x, y, l));
     }
 
-    function getAmountYes(int256 x, int256 y, int256 l) internal pure returns(int256) {
-        // x2 = x1 - f(x1)/ f'(x1)
-        int256 t = 0;
-        for(uint256 i = 0; i < 10; i++) {
-            t = t - FixedPointMathLib.sDivWad(invariantFunction(t, x, y, l), deriInvariantFunc(t, x, y, l));
-            int256 f = invariantFunction(t, x, y, l);
-            if(f < APPROX || f > -APPROX){
-                return t;
-            }else continue;
+    function ammFunc(int256 x, int256 y, int256 l) internal pure returns(int256) {
+        int256 z = FixedPointMathLib.sDivWad((y-x), l);
+        return FixedPointMathLib.sMulWad((y-x) ,Gaussian.cdf(z)) +  FixedPointMathLib.sMulWad(l, Gaussian.pdf(z)) - y;
+        // Provides the value of the invariant function when input values are x, y and initial liquidity is l
+    }
+
+    function funcDerivative(int256 x, int256 y, int256 l) internal pure returns(int256) {
+        int256 z = FixedPointMathLib.sDivWad((y-x), l);
+        return -Gaussian.cdf(z);
+    }
+
+    function getSwapAmountYes(int256 x, int256 y, int256 l) internal pure returns (int256) {
+        int256 t = x;
+
+        for(int256 i = 0; i < MAX_ITERS; i++){
+            int256 f = ammFunc(t, y, l);
+            if(abs(f) < APPROX){
+                return abs(t - x);
+            }
+            t = t - FixedPointMathLib.sDivWad(f , funcDerivative(t, y, l));
         }
-        // ??
-        return t;
+        return abs(t - x);
     }
 
-    function invariantFunction(int256 t, int256 x, int256 y, int256 l) internal pure returns(int256) {
-        // Invariant function
-        // f(t) = (a + t) * Gaussian.cdf((a + t) / liquidity) + liquidity * Gaussian.pdf((a + t) / liquidity) - y
-        int256 z = FixedPointMathLib.sDivWad((y-x + t), l);
-        return FixedPointMathLib.sMulWad((y-x + t) ,Gaussian.cdf(z)) +  FixedPointMathLib.sMulWad(l, Gaussian.pdf(z)) - y;
+    function abs(int256 f) internal pure returns(int256) {
+        return (f > 0 ? f : -f);
     }
 
-    function deriInvariantFunc(int256 t, int256 x, int256 y, int256 l) internal pure returns(int256){
-        int256 z = FixedPointMathLib.sDivWad((y-x + t), l);
-        return Gaussian.cdf(z);
+    function calcInitialLiquidity(uint256 amount) public pure returns(uint256) {
+        // amount/ pdf(0) = L
+        return FixedPointMathLib.divWad(amount, uint256(Gaussian.pdf(0)));
     }
 }
-
-/// Check whether the conversion of uint -> int does not give error i.e a number of size greater than 128 bytes will get overflowed on conversion
