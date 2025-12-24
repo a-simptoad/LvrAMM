@@ -21,9 +21,9 @@ contract LvrMarket {
 
     function initializeLiquidity(uint256 _liquidity) external {
         require(!liquidityInitialized, "Liquidity already Initialized");
-        liquidity = _liquidity;
-        yesToken = new YesToken(address(this), liquidity);
-        noToken = new NoToken(address(this), liquidity);
+        yesToken = new YesToken(address(this), _liquidity);
+        noToken = new NoToken(address(this), _liquidity);
+        liquidity = SwapMath.calcInitialLiquidity(_liquidity);
         liquidityInitialized = true;
     }
 
