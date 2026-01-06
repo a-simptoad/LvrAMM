@@ -9,21 +9,11 @@ library SwapMath {
     int256 constant APPROX = 1e15;
     int256 constant MAX_ITERS = 10;
 
-    function getSwapAmount(uint256 currentYesReserves, uint256 currentNoReserves, uint256 liquidity) external pure returns(uint256) {
-        // Invariant function
-        // f(t) = (a + t) * Gaussian.cdf((a + t) / liquidity) + liquidity * Gaussian.pdf((a + t) / liquidity) - y
-        // int256 delta = int256(currentNoReserves) - int256(currentYesReserves);
-        // int256 z = FixedPointMathLib.sDivWad(delta, liquidity);
-        int256 x = int256(currentYesReserves);
-        int256 y = int256(currentNoReserves);
-        int256 l = int256(liquidity);
-
-        return uint256(getSwapAmountYes(x, y, l));
-    }
-
     function ammFunc(int256 x, int256 y, int256 l) internal pure returns(int256) {
         int256 z = FixedPointMathLib.sDivWad((y-x), l);
-        return FixedPointMathLib.sMulWad((y-x) ,Gaussian.cdf(z)) +  FixedPointMathLib.sMulWad(l, Gaussian.pdf(z)) - y;
+        return FixedPointMathLib.sMulWad((y-x) ,Gaussian.cdf(z)) 
+        +  FixedPointMathLib.sMulWad(l, Gaussian.pdf(z)) 
+        - y;
         // Provides the value of the invariant function when input values are x, y and initial liquidity is l
     }
 
@@ -32,17 +22,19 @@ library SwapMath {
         return -Gaussian.cdf(z);
     }
 
-    function getSwapAmountYes(int256 x, int256 y, int256 l) internal pure returns (int256) {
+    function getNewReserve(int256 x, int256 y, int256 l) internal pure returns (int256) { // x is the token reserve to calculate
         int256 t = x;
 
         for(int256 i = 0; i < MAX_ITERS; i++){
             int256 f = ammFunc(t, y, l);
             if(abs(f) < APPROX){
-                return abs(t - x);
+                return abs(t);
             }
-            t = t - FixedPointMathLib.sDivWad(f , funcDerivative(t, y, l));
+            t = t - FixedPointMathLib.sDivWad(
+                        f , funcDerivative(t, y, l)
+                    );
         }
-        return abs(t - x);
+        return abs(t); // NewReserve
     }
 
     function abs(int256 f) internal pure returns(int256) {
@@ -51,6 +43,32 @@ library SwapMath {
 
     function calcInitialLiquidity(uint256 amount) public pure returns(uint256) {
         // amount/ pdf(0) = L
-        return FixedPointMathLib.divWad(amount, uint256(Gaussian.pdf(0)));
+        return FixedPointMathLib.divWad(
+            amount, uint256(Gaussian.pdf(0))
+        );
     }
+
+    function calcPrize(int256 x, int256 y, int256 l) internal pure returns(int256) {
+        // L * pdf((y-x) / L) = price
+        int256 z = FixedPointMathLib.sDivWad(y - x, l);
+        return FixedPointMathLib.sMulWad(
+            Gaussian.pdf(z), l
+        );
+    }
+
+// inputs ->
+// Current Reserve of Yes token
+// Current Reserve of No token 
+// Amount of token No to swap for token Yes || Amount of token Yes to swap for token No
+// Initial liquidity of the market
+// Invariant function
+// f(t) = (a + t) * Gaussian.cdf((a + t) / liquidity) + liquidity * Gaussian.pdf((a + t) / liquidity) - y
+
+    function getSwapAmount(bool yesToNo, uint256 currentReserveYes, uint256 currentReserveNo, uint256 initialLiquidity, uint256 amountIn) external pure returns(uint256){
+        if(yesToNo){
+            return currentReserveNo - uint256(getNewReserve(int256(currentReserveNo), int256(currentReserveYes + amountIn), int256(initialLiquidity)));
+        }
+        return currentReserveYes - uint256(getNewReserve(int256(currentReserveYes), int256(currentReserveNo + amountIn), int256(initialLiquidity)));
+    }
+
 }

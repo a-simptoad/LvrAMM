@@ -9,20 +9,18 @@ contract Router {
 
     struct MarketInfo {
         address market;
-        address resolver;
         uint256 liquidity;
         bool intialized;
     }
 
     mapping(bytes32 marketId => MarketInfo info) public markets;
-    // mapping(address user => uint256 deposit) public balances;
-    IERC20 public mUSD;
+    IERC20 public mUSD; // Collateral Token
     
     constructor(address _mUSD){
         mUSD = IERC20(_mUSD);
     } 
 
-    function create(string memory prediction, uint256 liquidity, address resolver) public {
+    function create(string memory prediction, uint256 collateralIn, address resolver) public {
         // A new market is deployed
         bytes32 marketId = keccak256(abi.encodePacked(prediction, resolver));
         require(!markets[marketId].intialized, "Market Already Exists");
@@ -31,12 +29,11 @@ contract Router {
         /*
         Transfer USD token to market contract
         */        
-        mUSD.transferFrom(msg.sender, address(market), liquidity);
-        market.initializeLiquidity(liquidity);
+        mUSD.transferFrom(msg.sender, address(market), collateralIn);
+        uint256 liquidity = market.initializeLiquidity(collateralIn);
 
         markets[marketId] = MarketInfo({
             market: address(market),
-            resolver: resolver,
             liquidity: liquidity,
             intialized: true
         });
@@ -44,28 +41,18 @@ contract Router {
         emit MarketCreated(marketId, resolver, address(market));
     }
 
-    // function deposit(uint256 amount, address market) public {}
-    
-    // function withdraw(uint256 amount, address market) public {}
-
-    function buyYes(address market, uint256 amount) public {
+    function buyYes(address market, uint256 collateralIn) public {
         // Takes mUSD from user
         // Mints Yes + No token
         // Sells No token to AMM
         // Sends corresponding Yes token to User
 
-        mUSD.transferFrom(msg.sender, market, amount);
-        LvrMarket(market).swap(amount, msg.sender);
+        mUSD.transferFrom(msg.sender, market, collateralIn);
+        uint256 amountOut = LvrMarket(market).swap(false, collateralIn);
+        IERC20(LvrMarket(market).getToken(true)).transferFrom(market, msg.sender, amountOut);
     }
 
     function sellYes() public {}
 
-    // function depositAndBuyToken() public {}
-
-    // function sellTokenAndWithdraw() public {}
-
     function resolveMarket() public {}
 }
-
-// A user has 100 USDC tokens (minted in the test contract.)
-// He uses those tokens to deposit and buy yes/no tokens of a market

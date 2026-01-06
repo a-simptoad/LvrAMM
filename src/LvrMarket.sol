@@ -19,34 +19,42 @@ contract LvrMarket {
         i_resolver = _resolver;
     }
 
-    function initializeLiquidity(uint256 _liquidity) external {
+    function initializeLiquidity(uint256 collateralIn) external returns(uint256){
         require(!liquidityInitialized, "Liquidity already Initialized");
-        yesToken = new YesToken(address(this), _liquidity);
-        noToken = new NoToken(address(this), _liquidity);
-        liquidity = SwapMath.calcInitialLiquidity(_liquidity);
+        yesToken = new YesToken(address(this), collateralIn);
+        noToken = new NoToken(address(this), collateralIn);
+        liquidity = SwapMath.calcInitialLiquidity(collateralIn);
         liquidityInitialized = true;
+        return liquidity;
     }
 
-    function mintToken(uint256 amount) internal {
-        yesToken.mint(address(this), amount);
-        noToken.mint(address(this), amount);
+    function swap(bool yesToNo, uint256 amountIn) public returns (uint256){
+        // Calculates amount of tokens to give after
+        uint256 amountOut = _swap(yesToNo, amountIn);
+
+        // Mints yes and no tokens
+        yesToken.mint(address(this), amountIn);
+        noToken.mint(address(this), amountIn);
+
+        // returns yes tokens through router contract 
+        IERC20(yesToken).approve(msg.sender, amountOut);
+        return amountOut;
+        
     }
 
-    function swap(uint256 amountIn, address to) public {
-        mintToken(amountIn);
-        IERC20(address(yesToken)).transfer(to, amountIn);
-        // Now the Market has (liquidity) yes tokens and (liquidity + amount) no tokens
-        // When i do _swap then the amm calculates 
-        _swap(to);
-    }
-
-    function _swap(address to) internal {
-        uint256 amountOut = SwapMath.getSwapAmount(IERC20(address(yesToken)).balanceOf(address(this)), IERC20(address(noToken)).balanceOf(address(this)), liquidity);
-        IERC20(address(yesToken)).transfer(to, amountOut);
-
+    function _swap(bool yesToNo, uint256 amountIn) internal view returns(uint256){
+        uint256 newReserve = SwapMath.getSwapAmount(yesToNo, IERC20(address(yesToken)).balanceOf(address(this)), IERC20(address(noToken)).balanceOf(address(this)), liquidity, amountIn);
+        return newReserve - IERC20(address(yesToken)).balanceOf(address(this));
     }
 
     function getUserBalance(address user) public view returns(uint256) {
         return IERC20(address(yesToken)).balanceOf(user);
+    }
+
+    function getToken(bool tokenYes) public view returns(address) {
+        if(tokenYes) {
+            return address(yesToken);
+        }
+        return address(noToken);
     }
 }
