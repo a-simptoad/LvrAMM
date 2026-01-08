@@ -28,23 +28,39 @@ contract LvrMarket {
         return liquidity;
     }
 
-    function swap(bool yesToNo, uint256 amountIn) public returns (uint256){
+    function buy(bool yesToNo, uint256 amountIn) public returns (uint256){
         // Calculates amount of tokens to give after
-        uint256 amountOut = _swap(yesToNo, amountIn);
+        uint256 amountOut = _swap(yesToNo, int256(amountIn));
 
         // Mints yes and no tokens
         yesToken.mint(address(this), amountIn);
         noToken.mint(address(this), amountIn);
 
         // returns yes tokens through router contract 
-        IERC20(yesToken).approve(msg.sender, amountOut);
+        if(yesToNo){
+            IERC20(noToken).approve(msg.sender, amountIn + amountOut);
+        }else{
+            IERC20(yesToken).approve(msg.sender, amountIn + amountOut);
+        }
         return amountOut;
-        
     }
 
-    function _swap(bool yesToNo, uint256 amountIn) internal view returns(uint256){
-        uint256 newReserve = SwapMath.getSwapAmount(yesToNo, IERC20(address(yesToken)).balanceOf(address(this)), IERC20(address(noToken)).balanceOf(address(this)), liquidity, amountIn);
-        return newReserve - IERC20(address(yesToken)).balanceOf(address(this));
+    function sell(bool yesToNo, uint256 amountIn) public returns (uint256){
+        uint256 amountOut = _swap(yesToNo, int256(amountIn));
+
+        if(yesToNo){
+            IERC20(noToken).approve(msg.sender, amountOut);
+        }else{
+            IERC20(yesToken).approve(msg.sender, amountOut);
+        }
+        return amountOut;
+    }
+
+    function _swap(bool yesToNo, int256 amountIn) internal view returns(uint256){
+        int256 currentReserveYes = int256(IERC20(address(yesToken)).balanceOf(address(this)));
+        int256 currentReserveNo = int256(IERC20(address(noToken)).balanceOf(address(this)));
+        uint256 amountOut = SwapMath.getSwapAmount(yesToNo, currentReserveYes, currentReserveNo, liquidity, amountIn);
+        return amountOut;
     }
 
     function getUserBalance(address user) public view returns(uint256) {

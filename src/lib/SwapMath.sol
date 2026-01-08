@@ -64,11 +64,11 @@ library SwapMath {
 // Invariant function
 // f(t) = (a + t) * Gaussian.cdf((a + t) / liquidity) + liquidity * Gaussian.pdf((a + t) / liquidity) - y
 
-    function getSwapAmount(bool yesToNo, uint256 currentReserveYes, uint256 currentReserveNo, uint256 initialLiquidity, uint256 amountIn) external pure returns(uint256){
+    function getSwapAmount(bool yesToNo, int256 currentReserveYes, int256 currentReserveNo, uint256 initialLiquidity, int256 amountIn) external pure returns(uint256){
         if(yesToNo){
-            return currentReserveNo - uint256(getNewReserve(int256(currentReserveNo), int256(currentReserveYes + amountIn), int256(initialLiquidity)));
+            return uint256(abs(currentReserveNo - getNewReserve(currentReserveNo, currentReserveYes + amountIn, int256(initialLiquidity))));
         }
-        return currentReserveYes - uint256(getNewReserve(int256(currentReserveYes), int256(currentReserveNo + amountIn), int256(initialLiquidity)));
+        return uint256(abs(currentReserveYes - getNewReserve(currentReserveYes, currentReserveNo + amountIn, int256(initialLiquidity))));
     }
 
 }

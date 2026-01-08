@@ -48,11 +48,44 @@ contract Router {
         // Sends corresponding Yes token to User
 
         mUSD.transferFrom(msg.sender, market, collateralIn);
-        uint256 amountOut = LvrMarket(market).swap(false, collateralIn);
-        IERC20(LvrMarket(market).getToken(true)).transferFrom(market, msg.sender, amountOut);
+        uint256 amountOut = LvrMarket(market).buy(false, collateralIn);
+
+        address yesToken = LvrMarket(market).getToken(true);
+        IERC20(yesToken).transferFrom(market, msg.sender, collateralIn + amountOut);
     }
 
-    function sellYes() public {}
+    function buyNo(address market, uint256 collateralIn) public {
+        mUSD.transferFrom(msg.sender, market, collateralIn);
+        uint256 amountOut = LvrMarket(market).buy(true, collateralIn);
+
+        address noToken = LvrMarket(market).getToken(false);
+        IERC20(noToken).transferFrom(market, msg.sender, amountOut);
+    }
+
+    function sellYes(address market, uint256 tokenIn) public {
+        // The user wants to sell 10 yesToken to the market
+        // He will get corresponding amount of noToken from the market 
+        // Takes yesToken from the user
+        // Sells Yes token to AMM
+        // Sends corresponding No token to User
+        uint256 amountOut = LvrMarket(market).sell(true, tokenIn);
+
+        address yesToken = LvrMarket(market).getToken(true);
+        address noToken = LvrMarket(market).getToken(false);
+
+        IERC20(yesToken).transferFrom(msg.sender, market, tokenIn);
+        IERC20(noToken).transferFrom(market, msg.sender, amountOut);
+    }
+
+    function sellNo(address market, uint256 tokenIn) public {
+        uint256 amountOut = LvrMarket(market).sell(false, tokenIn);
+
+        address yesToken = LvrMarket(market).getToken(true);
+        address noToken = LvrMarket(market).getToken(false);
+
+        IERC20(noToken).transferFrom(msg.sender, market, tokenIn);
+        IERC20(yesToken).transferFrom(market, msg.sender, amountOut);
+    }
 
     function resolveMarket() public {}
 }
