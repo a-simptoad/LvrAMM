@@ -11,13 +11,20 @@ library Math {
     /**
      * @dev calculates the price of token
      */
-    function calcPrice(uint256 x, uint256 y, uint256 l) internal pure returns(uint256){
+    function calcPrice(uint256 x, uint256 y, uint256 l) public pure returns(uint256){
         // price = cdf((x-y) / L)
 
         int256 delta = int256(y) - int256(x);
-        int256 z = delta.sMulWad(int256(l));
+        int256 z = delta.sDivWad(int256(l));
 
         int256 price = Gaussian.cdf(z);
         return uint256(price);
+    }
+
+    function calcInitialLiquidity(uint256 amount) public pure returns(uint256) {
+        // amount/ pdf(0) = L
+        return FixedPointMathLib.divWad(
+            amount, uint256(Gaussian.pdf(0))
+        );
     }
 }

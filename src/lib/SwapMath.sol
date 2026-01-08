@@ -41,21 +41,6 @@ library SwapMath {
         return (f > 0 ? f : -f);
     }
 
-    function calcInitialLiquidity(uint256 amount) public pure returns(uint256) {
-        // amount/ pdf(0) = L
-        return FixedPointMathLib.divWad(
-            amount, uint256(Gaussian.pdf(0))
-        );
-    }
-
-    function calcPrize(int256 x, int256 y, int256 l) internal pure returns(int256) {
-        // L * pdf((y-x) / L) = price
-        int256 z = FixedPointMathLib.sDivWad(y - x, l);
-        return FixedPointMathLib.sMulWad(
-            Gaussian.pdf(z), l
-        );
-    }
-
 // inputs ->
 // Current Reserve of Yes token
 // Current Reserve of No token 

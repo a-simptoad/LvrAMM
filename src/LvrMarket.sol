@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 import {YesToken, NoToken} from "./Token.sol";
 import {SwapMath} from "./lib/SwapMath.sol";
+import {Math} from "./lib/Math.sol";
 
 contract LvrMarket {
 
@@ -23,7 +24,7 @@ contract LvrMarket {
         require(!liquidityInitialized, "Liquidity already Initialized");
         yesToken = new YesToken(address(this), collateralIn);
         noToken = new NoToken(address(this), collateralIn);
-        liquidity = SwapMath.calcInitialLiquidity(collateralIn);
+        liquidity = Math.calcInitialLiquidity(collateralIn);
         liquidityInitialized = true;
         return liquidity;
     }
@@ -72,5 +73,9 @@ contract LvrMarket {
             return address(yesToken);
         }
         return address(noToken);
+    }
+
+    function getPriceYes() public view returns(uint256) {
+        return Math.calcPrice(yesToken.balanceOf(address(this)), noToken.balanceOf(address(this)), liquidity);
     }
 }
