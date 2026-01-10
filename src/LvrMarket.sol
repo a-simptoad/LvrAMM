@@ -15,9 +15,15 @@ contract LvrMarket {
     uint256 private liquidity;
 
     bool private liquidityInitialized;
+    bool private isDynamic;
 
-    constructor(address _resolver){
+    uint256 private deadline;
+
+    constructor(address _resolver, bool _type, uint256 duration){
         i_resolver = _resolver;
+        isDynamic = _type;
+
+        deadline = block.timestamp + duration;
     }
 
     function initializeLiquidity(uint256 collateralIn) external returns(uint256){
@@ -58,9 +64,17 @@ contract LvrMarket {
     }
 
     function _swap(bool yesToNo, int256 amountIn) internal view returns(uint256){
+        require(block.timestamp > deadline, "Market Expired");
+
+        uint256 liq;
+        if(isDynamic){
+            liq = Math.calcLiquidity(liquidity, deadline, block.timestamp);
+        }else{
+            liq = liquidity;
+        }
         int256 currentReserveYes = int256(IERC20(address(yesToken)).balanceOf(address(this)));
         int256 currentReserveNo = int256(IERC20(address(noToken)).balanceOf(address(this)));
-        uint256 amountOut = SwapMath.getSwapAmount(yesToNo, currentReserveYes, currentReserveNo, liquidity, amountIn);
+        uint256 amountOut = SwapMath.getSwapAmount(yesToNo, currentReserveYes, currentReserveNo, liq, amountIn);
         return amountOut;
     }
 

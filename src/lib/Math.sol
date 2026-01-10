@@ -27,4 +27,11 @@ library Math {
             amount, uint256(Gaussian.pdf(0))
         );
     }
+
+    function calcLiquidity(uint256 liquidity, uint256 deadline, uint256 currentTime) public pure returns(uint256) {
+        // liquidity = L * (T - t)^0.5
+        uint256 deltaTime = deadline - currentTime;
+        return FixedPointMathLib.mulWad(liquidity, FixedPointMathLib.sqrt(deltaTime));
+
+    }
 }

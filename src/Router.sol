@@ -20,12 +20,12 @@ contract Router {
         mUSD = IERC20(_mUSD);
     } 
 
-    function create(string memory prediction, uint256 collateralIn, address resolver) public {
+    function create(string memory prediction, bool isDynamic, uint256 duration, uint256 collateralIn, address resolver) public {
         // A new market is deployed
         bytes32 marketId = keccak256(abi.encodePacked(prediction, resolver));
         require(!markets[marketId].intialized, "Market Already Exists");
 
-        LvrMarket market = new LvrMarket(resolver);
+        LvrMarket market = new LvrMarket(resolver, isDynamic, duration);
         /*
         Transfer USD token to market contract
         */        
