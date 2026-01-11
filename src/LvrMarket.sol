@@ -7,11 +7,26 @@ import {SwapMath} from "./lib/SwapMath.sol";
 import {Math} from "./lib/Math.sol";
 
 contract LvrMarket {
+    enum MarketState {
+        OPEN,
+        CLOSED,
+        PENDING,
+        DISPUTED,
+        RESOLVED
+    }
+
+    uint256 constant DISPUTE_WINDOW = 5 * 60; // 5 mins
+    MarketState public state;
+    uint256 private resolutionTimestamp;
+    uint256 private outcome;
+    address private proposer;
+
+    bool private isResolved = false;
 
     YesToken public yesToken;
     NoToken public noToken;
 
-    address immutable i_resolver;
+    address immutable i_router;
     uint256 private liquidity;
 
     bool private liquidityInitialized;
@@ -19,14 +34,48 @@ contract LvrMarket {
 
     uint256 private deadline;
 
-    constructor(address _resolver, bool _type, uint256 duration){
-        i_resolver = _resolver;
+    constructor(address _router, bool _type, uint256 duration){
+        i_router = _router;
         isDynamic = _type;
 
         deadline = block.timestamp + duration;
+        state = MarketState.OPEN;
     }
 
-    function initializeLiquidity(uint256 collateralIn) external returns(uint256){
+    modifier isRouter() {
+        require(msg.sender == i_router, "Invalid Caller Address");
+        _;
+    }
+
+    function proposeOutcome(uint256 _outcome) external {
+        require(state == MarketState.OPEN, "Market Not Open");
+        require(block.timestamp >= deadline, "Market not finished");
+        require(_outcome == 0 || _outcome == 1, "Invalid outcome");
+        // Make a bond with the proposer to keep as collateral incase of false outcome
+        outcome = _outcome;
+        state = MarketState.PENDING;
+        resolutionTimestamp = block.timestamp + DISPUTE_WINDOW;
+        proposer = msg.sender;
+    }
+
+    function dispute() external {
+        require(state == MarketState.PENDING, "Challenge Window Not opened");
+        // Break the bond 
+        state = MarketState.DISPUTED;
+        // set the market outcome through creator/resolver voting/admin
+    }
+
+    function settleMarket() external {
+        require(block.timestamp >= resolutionTimestamp, "Challenge Window Open");
+        // Return bond to proposer with Reward collected through market fees
+        isResolved = true;
+        state = MarketState.RESOLVED;
+    }
+
+    function adminResolve() external {
+    }
+
+    function initializeLiquidity(uint256 collateralIn) external isRouter returns(uint256){
         require(!liquidityInitialized, "Liquidity already Initialized");
         yesToken = new YesToken(address(this), collateralIn);
         noToken = new NoToken(address(this), collateralIn);
@@ -35,7 +84,9 @@ contract LvrMarket {
         return liquidity;
     }
 
-    function buy(bool yesToNo, uint256 amountIn) public returns (uint256){
+    function buy(bool yesToNo, uint256 amountIn) public isRouter returns (uint256){
+        require(state == MarketState.OPEN, "Market Not Open");
+
         // Calculates amount of tokens to give after
         uint256 amountOut = _swap(yesToNo, int256(amountIn));
 
@@ -52,7 +103,9 @@ contract LvrMarket {
         return amountOut;
     }
 
-    function sell(bool yesToNo, uint256 amountIn) public returns (uint256){
+    function sell(bool yesToNo, uint256 amountIn) public isRouter returns (uint256){
+        require(state == MarketState.OPEN, "Market Not Open");
+
         uint256 amountOut = _swap(yesToNo, int256(amountIn));
 
         if(yesToNo){

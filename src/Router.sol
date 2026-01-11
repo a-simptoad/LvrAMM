@@ -5,7 +5,7 @@ import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 import {LvrMarket} from "src/LvrMarket.sol";
 
 contract Router {
-    event MarketCreated(bytes32 marketId, address resolver, address market);
+    event MarketCreated(bytes32 marketId, address market);
 
     struct MarketInfo {
         address market;
@@ -20,12 +20,12 @@ contract Router {
         mUSD = IERC20(_mUSD);
     } 
 
-    function create(string memory prediction, bool isDynamic, uint256 duration, uint256 collateralIn, address resolver) public {
+    function create(string memory prediction, bool isDynamic, uint256 duration, uint256 collateralIn) public {
         // A new market is deployed
-        bytes32 marketId = keccak256(abi.encodePacked(prediction, resolver));
+        bytes32 marketId = keccak256(abi.encodePacked(prediction));
         require(!markets[marketId].intialized, "Market Already Exists");
 
-        LvrMarket market = new LvrMarket(resolver, isDynamic, duration);
+        LvrMarket market = new LvrMarket(address(this), isDynamic, duration);
         /*
         Transfer USD token to market contract
         */        
@@ -38,7 +38,7 @@ contract Router {
             intialized: true
         });
         
-        emit MarketCreated(marketId, resolver, address(market));
+        emit MarketCreated(marketId, address(market));
     }
 
     function buyYes(address market, uint256 collateralIn) public {
