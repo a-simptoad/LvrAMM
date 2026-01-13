@@ -81,6 +81,10 @@ contract Router is IMarketBuyCallback, IMarketSellCallback, IMarketRedeemCallbac
         LvrMarket(market).settleMarket();
     }
 
+    function redeem(address market, uint256 amountYes, uint256 amountNo) public {
+        LvrMarket(market).redeemCollateralWithToken(amountYes, amountNo, msg.sender);
+    }
+
     // Callbacks
 
     function marketBuyCallback(uint256 collateralIn, bytes calldata data) external override {

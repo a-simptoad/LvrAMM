@@ -11,6 +11,17 @@ import {IMarketRedeemCallback} from "./interfaces/IMarketRedeemCallback.sol";
 import {IMarketBondCallback} from "./interfaces/IMarketBondCallback.sol";
 
 contract LvrMarket {
+    event MarketInitialized(uint256 liquidity, uint256 collateralIn, uint256 timestamp);
+    
+    event OutcomeProposed(uint256 outcome, address indexed proposer, uint256 resolutionTimestamp);
+    event MarketDisputed();
+    event MarketSettled(uint256 outcome, address indexed proposer, uint256 bondReturned);
+    event MarketResolvedByAdmin(uint256 outcome, address indexed admin);
+    
+    event MarketBuy(address indexed buyer, bool isBuyYes, uint256 amountIn, uint256 amountOut);
+    event MarketSell(address indexed seller, bool isSellYes, uint256 amountIn, uint256 amountOut);
+    event CollateralRedeemed(address indexed redeemer, uint256 amountYes, uint256 amountNo, uint256 payout);
+
     enum MarketState {
         OPEN,
         CLOSED,
@@ -19,7 +30,7 @@ contract LvrMarket {
         RESOLVED
     }
 
-    uint256 constant DISPUTE_WINDOW = 5 * 60; // 5 mins
+    uint256 constant DISPUTE_WINDOW = 5 minutes; // 5 mins
     uint256 constant BOND_VALUE = 50;
     MarketState public state;
     uint256 private resolutionTimestamp;
@@ -68,6 +79,8 @@ contract LvrMarket {
         state = MarketState.PENDING;
         resolutionTimestamp = block.timestamp + DISPUTE_WINDOW;
         proposer = _proposer;
+
+        emit OutcomeProposed(_outcome, _proposer, resolutionTimestamp);
     }
 
     function dispute() external isRouter{
@@ -75,6 +88,8 @@ contract LvrMarket {
         // Break the bond 
         state = MarketState.DISPUTED;
         // set the market outcome through creator/resolver voting/admin
+        
+        emit MarketDisputed();
     }
 
     function settleMarket() external isRouter{
@@ -82,6 +97,8 @@ contract LvrMarket {
         // Return bond to proposer with Reward collected through market fees
         IERC20(i_collateral).transfer(proposer, BOND_VALUE); // Add fees and then reward the proposer
         state = MarketState.RESOLVED;
+
+        emit MarketSettled(outcome, proposer, BOND_VALUE);
     }
 
     function adminResolve(uint256 _outcome) external {
@@ -97,6 +114,8 @@ contract LvrMarket {
 
         outcome = _outcome;
         state = MarketState.RESOLVED;
+
+        emit MarketResolvedByAdmin(_outcome, msg.sender);
     }
 
     function redeemCollateralWithToken(uint256 amountYesIn, uint256 amountNoIn, address redeemer) external isRouter {
@@ -108,11 +127,16 @@ contract LvrMarket {
         if(amountYesIn > 0) yesToken.burn(address(this), amountYesIn);
         if(amountNoIn > 0) noToken.burn(address(this), amountNoIn);
 
+        uint256 payout = 0;
         if(outcome == 1) {
+            payout = amountYesIn;
             IERC20(i_collateral).transfer(redeemer, amountYesIn);
         }else {
+            payout = amountNoIn;
             IERC20(i_collateral).transfer(redeemer,  amountNoIn);
         }
+
+        emit CollateralRedeemed(redeemer, amountYesIn, amountNoIn, payout);
     }
 
     function initializeLiquidity(uint256 collateralIn) external isRouter returns(uint256){
@@ -121,6 +145,8 @@ contract LvrMarket {
         noToken = new NoToken(address(this), collateralIn);
         liquidity = Math.calcInitialLiquidity(collateralIn);
         liquidityInitialized = true;
+        
+        emit MarketInitialized(liquidity, collateralIn, block.timestamp);
         return liquidity;
     }
 
@@ -150,6 +176,8 @@ contract LvrMarket {
         }else{
             IERC20(noToken).transfer(buyer, amountIn + amountOut);
         }
+
+        emit MarketBuy(buyer, isBuyYes, amountIn, amountOut);
     }
 
     function sell(bool isSellYes, uint256 amountIn, address seller) public isRouter {
@@ -170,6 +198,8 @@ contract LvrMarket {
         }else{
             IERC20(yesToken).transfer(seller, amountOut);
         }
+
+        emit MarketSell(seller, isSellYes, amountIn, amountOut);
     }
 
     function _swap(bool yesToNo, int256 amountIn) internal view returns(uint256){
