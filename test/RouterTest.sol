@@ -74,3 +74,4 @@ contract RouterTest is Test{
 // TO-DO
 // 1. Add zero address error to the functions.
 // 2. Add a check for collateral entered for buy and sell functions in LvrMarket (specially before minting yes and no tokens)
+// 3. Add event in market
