@@ -59,8 +59,6 @@ contract Router is IMarketBuyCallback, IMarketSellCallback, IMarketRedeemCallbac
     }
 
     function sellYes(address market, uint256 tokenIn) public {
-        // The user wants to sell 10 yesToken to the market
-        // He will get corresponding amount of noToken from the market 
         // Takes yesToken from the user
         // Sells Yes token to AMM
         // Sends corresponding No token to User
@@ -71,8 +69,16 @@ contract Router is IMarketBuyCallback, IMarketSellCallback, IMarketRedeemCallbac
         LvrMarket(market).sell(false, tokenIn, msg.sender);
     }
 
-    function resolveMarket() public {
+    function proposerOutcome(address market, uint256 _outcome) public {
+        LvrMarket(market).proposeOutcome(_outcome, msg.sender);
+    }
 
+    function dispute(address market) public {
+        LvrMarket(market).dispute();
+    }
+
+    function settleMarket(address market) public {
+        LvrMarket(market).settleMarket();
     }
 
     // Callbacks

@@ -54,30 +54,30 @@ contract LvrMarket {
         _;
     }
 
-    function proposeOutcome(uint256 _outcome) external {
+    function proposeOutcome(uint256 _outcome, address _proposer) external isRouter{
         require(state == MarketState.OPEN, "Market Not Open");
         require(block.timestamp >= deadline, "Market not finished");
         require(_outcome == 0 || _outcome == 1, "Invalid outcome");
         // Make a bond with the proposer to keep as collateral incase of false outcome
         uint256 balanceBefore = IERC20(i_collateral).balanceOf(address(this));
-        bytes memory data = abi.encode(i_collateral, msg.sender);
+        bytes memory data = abi.encode(i_collateral, _proposer);
         IMarketBondCallback(msg.sender).marketBondCallback(BOND_VALUE, data);
         require(IERC20(i_collateral).balanceOf(address(this)) >= balanceBefore + BOND_VALUE);
 
         outcome = _outcome;
         state = MarketState.PENDING;
         resolutionTimestamp = block.timestamp + DISPUTE_WINDOW;
-        proposer = msg.sender;
+        proposer = _proposer;
     }
 
-    function dispute() external {
+    function dispute() external isRouter{
         require(state == MarketState.PENDING, "Challenge Window Not opened");
         // Break the bond 
         state = MarketState.DISPUTED;
         // set the market outcome through creator/resolver voting/admin
     }
 
-    function settleMarket() external {
+    function settleMarket() external isRouter{
         require(block.timestamp >= resolutionTimestamp, "Challenge Window Open");
         // Return bond to proposer with Reward collected through market fees
         IERC20(i_collateral).transfer(proposer, BOND_VALUE); // Add fees and then reward the proposer
@@ -99,15 +99,19 @@ contract LvrMarket {
         state = MarketState.RESOLVED;
     }
 
-    function redeemCollateralWithToken(uint256 amountYes, uint256 amountNo) external isRouter {
+    function redeemCollateralWithToken(uint256 amountYesIn, uint256 amountNoIn, address redeemer) external isRouter {
         require(state == MarketState.RESOLVED, "Market Not Resolved");
-        bytes memory data = abi.encode(address(yesToken), address(noToken), msg.sender);
-        IMarketRedeemCallback(msg.sender).marketRedeemCallback(amountYes, amountNo, data);
-        
+
+        bytes memory data = abi.encode(address(yesToken), address(noToken), redeemer);
+        IMarketRedeemCallback(msg.sender).marketRedeemCallback(amountYesIn, amountNoIn, data);
+
+        if(amountYesIn > 0) yesToken.burn(address(this), amountYesIn);
+        if(amountNoIn > 0) noToken.burn(address(this), amountNoIn);
+
         if(outcome == 1) {
-            IERC20(i_collateral).approve(msg.sender, amountYes);
+            IERC20(i_collateral).transfer(redeemer, amountYesIn);
         }else {
-            IERC20(i_collateral).approve(msg.sender,  amountNo);
+            IERC20(i_collateral).transfer(redeemer,  amountNoIn);
         }
     }
 
@@ -151,16 +155,19 @@ contract LvrMarket {
     function sell(bool isSellYes, uint256 amountIn, address seller) public isRouter {
         require(state == MarketState.OPEN, "Market Not Open");
 
-        IERC20 tokenIn = isSellYes ? IERC20(yesToken) : IERC20(noToken);
+        address tokenIn = isSellYes ? address(yesToken) : address(noToken);
         uint256 amountOut = _swap(isSellYes, int256(amountIn));
 
+        uint256 tokenBalanceBefore = IERC20(tokenIn).balanceOf(address(this));
+
+        bytes memory data = abi.encode(tokenIn, seller);
+        IMarketSellCallback(msg.sender).marketSellCallback(amountIn, data);
+
+        require(IERC20(tokenIn).balanceOf(address(this)) >= tokenBalanceBefore + amountIn);
+
         if(isSellYes){
-            bytes memory data = abi.encode(address(yesToken), seller);
-            IMarketSellCallback(msg.sender).marketSellCallback(amountIn, data);
             IERC20(noToken).transfer(seller, amountOut);
         }else{
-            bytes memory data = abi.encode(address(noToken), seller);
-            IMarketSellCallback(msg.sender).marketSellCallback(amountIn, data);
             IERC20(yesToken).transfer(seller, amountOut);
         }
     }
